@@ -1,41 +1,108 @@
-/* ═══════════════════════════════════════════════
-   Campus Pulse – app.js (vanilla JS)
-   ═══════════════════════════════════════════════ */
+/**
+ * @fileoverview Campus Pulse frontend client application (Vanilla JS).
+ * Handles notice parsing, event filtering, calendar rendering, theme toggling, and WCAG AA accessibility.
+ */
 
 (function () {
   "use strict";
 
-  /* ───── Constants & State ───── */
+  /* ───── Constants & Theme Configurations ───── */
 
   const CATEGORIES = ["Academic", "Cultural", "Sports", "Club", "Deadline", "Other"];
+
   const CAT_COLORS = {
-    Academic: { bg: "bg-blue-500/20", text: "text-blue-400", border: "border-blue-500/30", dot: "bg-blue-400" },
-    Cultural: { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500/30", dot: "bg-purple-400" },
-    Sports: { bg: "bg-green-500/20", text: "text-green-400", border: "border-green-500/30", dot: "bg-green-400" },
-    Club: { bg: "bg-yellow-500/20", text: "text-yellow-400", border: "border-yellow-500/30", dot: "bg-yellow-400" },
-    Deadline: { bg: "bg-red-500/20", text: "text-red-400", border: "border-red-500/30", dot: "bg-red-400" },
-    Other: { bg: "bg-gray-500/20", text: "text-gray-400", border: "border-gray-500/30", dot: "bg-gray-400" },
+    Academic: { bg: "bg-blue-500/20", text: "text-blue-300", border: "border-blue-500/40", dot: "bg-blue-400" },
+    Cultural: { bg: "bg-purple-500/20", text: "text-purple-300", border: "border-purple-500/40", dot: "bg-purple-400" },
+    Sports: { bg: "bg-green-500/20", text: "text-green-300", border: "border-green-500/40", dot: "bg-green-400" },
+    Club: { bg: "bg-amber-500/20", text: "text-amber-300", border: "border-amber-500/40", dot: "bg-amber-400" },
+    Deadline: { bg: "bg-rose-500/20", text: "text-rose-300", border: "border-rose-500/40", dot: "bg-rose-400" },
+    Other: { bg: "bg-slate-500/20", text: "text-slate-300", border: "border-slate-500/40", dot: "bg-slate-400" },
   };
+
   const PRIORITY_BADGES = {
-    Urgent: { label: "Urgent", classes: "bg-red-500/20 text-red-400 border border-red-500/30" },
-    Upcoming: { label: "Upcoming", classes: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" },
-    Expired: { label: "Expired", classes: "bg-gray-500/20 text-gray-400 border border-gray-500/30" },
+    Urgent: { label: "Urgent", classes: "bg-red-500/25 text-red-300 border border-red-500/40" },
+    Upcoming: { label: "Upcoming", classes: "bg-amber-500/25 text-amber-300 border border-amber-500/40" },
+    Expired: { label: "Expired", classes: "bg-slate-500/25 text-slate-300 border border-slate-500/40" },
   };
 
   const STORAGE_KEY = "campusPulse_events";
   let currentView = "list";
   let miniCalDate = new Date();
+  let lastActiveElementBeforeModal = null;
 
-  /* ───── Helpers ───── */
+  /* ───── Safe Sanitization & Debounce Utilities ───── */
 
+  /**
+   * Debounces a function call by the specified delay in milliseconds.
+   * @param {Function} func - Target function.
+   * @param {number} wait - Debounce delay in ms.
+   * @returns {Function} Debounced function.
+   */
+  function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+  }
+
+  /**
+   * Escapes HTML special characters to prevent Cross-Site Scripting (XSS).
+   * @param {unknown} str - Input string.
+   * @returns {string} Sanitized HTML string.
+   */
+  function escHTML(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/\//g, "&#x2F;");
+  }
+
+  /**
+   * Escapes double quotes and tags for safe insertion into HTML attributes.
+   * @param {unknown} str - Input attribute string.
+   * @returns {string} Sanitized attribute string.
+   */
+  function escAttr(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  /* ───── Date Calculation Utilities (Asia/Kolkata) ───── */
+
+  /**
+   * Returns current date string in Asia/Kolkata timezone (YYYY-MM-DD).
+   * @returns {string} Date string.
+   */
   function todayISO() {
     return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
   }
 
-  function toIST(date) {
-    return new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  /**
+   * Adds calendar days to a base date without UTC drift.
+   * @param {string} base - Base date in YYYY-MM-DD.
+   * @param {number} n - Days to add.
+   * @returns {string} Resulting date string.
+   */
+  function addDays(base, n) {
+    const [y, m, d] = base.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + n, 12, 0, 0));
+    return dt.toISOString().slice(0, 10);
   }
 
+  /**
+   * Computes calendar days from today in Asia/Kolkata.
+   * @param {string} dateStr - Target date string.
+   * @returns {number} Difference in calendar days.
+   */
   function daysFromNow(dateStr) {
     const [y1, m1, d1] = todayISO().split("-").map(Number);
     const [y2, m2, d2] = dateStr.split("-").map(Number);
@@ -44,6 +111,11 @@
     return Math.round((utc2 - utc1) / 86400000);
   }
 
+  /**
+   * Determines urgency status tag.
+   * @param {string} dateStr - Event date string.
+   * @returns {"Urgent"|"Upcoming"|"Expired"} Priority status.
+   */
   function priority(dateStr) {
     const diff = daysFromNow(dateStr);
     if (diff < 0) return "Expired";
@@ -51,17 +123,40 @@
     return "Upcoming";
   }
 
+  /**
+   * Formats a date string for user-friendly localized display.
+   * @param {string} dateStr - Date string (YYYY-MM-DD).
+   * @returns {string} Formatted localized date string.
+   */
   function fmtDate(dateStr) {
     try {
-      const d = new Date(dateStr + "T00:00:00");
-      return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-    } catch { return dateStr; }
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      return dt.toLocaleDateString("en-IN", {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      });
+    } catch {
+      return dateStr;
+    }
   }
 
+  /**
+   * Generates a unique client-side ID for new events.
+   * @returns {string} Unique ID string.
+   */
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
 
+  /**
+   * Returns human-readable relative label (Today, Tomorrow, Yesterday).
+   * @param {string} dateStr - Date string.
+   * @returns {string|null} Relative label or null.
+   */
   function relDay(dateStr) {
     const diff = daysFromNow(dateStr);
     if (diff === 0) return "Today";
@@ -70,15 +165,22 @@
     return null;
   }
 
-  /* ───── Storage ───── */
+  /* ───── Local Storage Persistence ───── */
 
   function loadEvents() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
   }
 
   function saveEvents(events) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+    } catch (e) {
+      console.error("Failed to persist events to localStorage:", e);
+    }
   }
 
   function addEvent(ev) {
@@ -92,34 +194,52 @@
   function updateEvent(id, data) {
     const events = loadEvents();
     const idx = events.findIndex((e) => e.id === id);
-    if (idx !== -1) Object.assign(events[idx], data);
-    saveEvents(events);
+    if (idx !== -1) {
+      Object.assign(events[idx], data);
+      saveEvents(events);
+    }
   }
 
   function deleteEvent(id) {
     saveEvents(loadEvents().filter((e) => e.id !== id));
   }
 
-  /* ───── Sample data (relative to today) ───── */
-
-  function addDays(base, n) {
-    const [y, m, d] = base.split("-").map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d + n, 12, 0, 0));
-    return dt.toISOString().slice(0, 10);
-  }
+  /* ───── Realistic Sample Data Relative to Today ───── */
 
   function getSampleEvents() {
     const t = todayISO();
     return [
-      { id: uid(), title: "Data Structures Assignment Due", date: addDays(t, 1), time: "11:59 PM", venue: "Online Portal", category: "Deadline" },
-      { id: uid(), title: "Annual Cultural Fest – Rhythms", date: addDays(t, 3), time: "2:00 PM – 6:00 PM", venue: "Main Auditorium", category: "Cultural" },
-      { id: uid(), title: "Inter-Department Cricket Match", date: addDays(t, 5), time: "9:00 AM", venue: "Sports Ground", category: "Sports" },
+      {
+        id: uid(),
+        title: "Data Structures Assignment Due",
+        date: addDays(t, 1),
+        time: "11:59 PM",
+        venue: "Online LMS Portal",
+        category: "Deadline",
+        notes: "Submit PDF report with execution screenshots and GitHub repository link.",
+      },
+      {
+        id: uid(),
+        title: "Annual Cultural Fest – Rhythms",
+        date: addDays(t, 3),
+        time: "2:00 PM – 6:00 PM",
+        venue: "Main Auditorium",
+        category: "Cultural",
+        notes: "College ID card is mandatory for entry. Passes available at student council desk.",
+      },
+      {
+        id: uid(),
+        title: "Inter-Department Cricket Match",
+        date: addDays(t, 5),
+        time: "9:00 AM",
+        venue: "Sports Ground",
+        category: "Sports",
+        notes: "Wear departmental sports jersey. Refreshments provided after the match.",
+      },
     ];
   }
 
   function sampleNotice() {
-    const t = todayISO();
-    const d1 = "tmrw";
     return `Hey everyone!! 🎉
 Coding Club meet tmrw 5pm in Lab 3, bring ur laptops!! 💻
 Also don't forget - Prof. Sharma's extra class on Linear Algebra this Friday at 10am in Room 204.
@@ -127,10 +247,9 @@ And guys the deadline for the hackathon registration is day after tomorrow, subm
 See you there! 🙌`;
   }
 
-  /* ───── DOM refs ───── */
+  /* ───── DOM Element References ───── */
 
   const $ = (s) => document.querySelector(s);
-  const $$ = (s) => document.querySelectorAll(s);
 
   const searchInput = $("#searchInput");
   const pasteInput = $("#pasteInput");
@@ -151,20 +270,20 @@ See you there! 🙌`;
   const digestBtn = $("#digestBtn");
   const digestText = $("#digestText");
   const digestSpinner = $("#digestSpinner");
-  const digestBanner = $("#digestBanner");
   const attentionBanner = $("#attentionBanner");
   const attentionList = $("#attentionList");
   const themeToggle = $("#themeToggle");
 
-  // Mini calendar
+  // Mini calendar refs
   const miniCalTitle = $("#miniCalTitle");
   const miniCalGrid = $("#miniCalGrid");
   const prevMonthBtn = $("#prevMonth");
   const nextMonthBtn = $("#nextMonth");
 
-  // Edit modal
+  // Edit modal refs
   const editModal = $("#editModal");
   const editOverlay = $("#editOverlay");
+  const editForm = $("#editForm");
   const editId = $("#editId");
   const editTitle = $("#editTitle");
   const editDate = $("#editDate");
@@ -173,14 +292,13 @@ See you there! 🙌`;
   const editCategory = $("#editCategory");
   const editNotes = $("#editNotes");
   const editCancel = $("#editCancel");
-  const editSave = $("#editSave");
 
-  // Stats
+  // Stats refs
   const statTotal = $("#statTotal");
   const statUrgent = $("#statUrgent");
   const statWeek = $("#statWeek");
 
-  /* ───── Theme ───── */
+  /* ───── Theme Management ───── */
 
   function initTheme() {
     const stored = localStorage.getItem("campusPulse_theme");
@@ -199,36 +317,37 @@ See you there! 🙌`;
     );
   });
 
-  /* ───── Attention Banner ───── */
+  /* ───── Attention Banner Rendering ───── */
 
   function renderAttention() {
     const events = loadEvents();
-    const today = todayISO();
-    const urgent = events.filter((e) => {
-      const p = priority(e.date);
-      return p === "Urgent";
-    });
+    const urgent = events.filter((e) => priority(e.date) === "Urgent");
+
     if (urgent.length === 0) {
       attentionBanner.classList.add("hidden");
+      attentionList.innerHTML = "";
       return;
     }
+
     attentionBanner.classList.remove("hidden");
     attentionList.innerHTML = urgent
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((e) => {
         const rel = relDay(e.date);
-        const tag = rel ? `<span class="font-medium text-teal-400">${rel}</span>` : "";
-        return `<div class="flex items-center gap-2">
-          <span class="cal-dot ${CAT_COLORS[e.category]?.dot || "bg-gray-400"}"></span>
-          <span>${e.title}</span>
+        const tag = rel
+          ? `<span class="font-semibold text-teal-400 bg-teal-500/10 px-2 py-0.5 rounded text-xs">${escHTML(rel)}</span>`
+          : "";
+        return `<div class="flex items-center gap-2.5 py-1">
+          <span class="cal-dot shrink-0 ${CAT_COLORS[e.category]?.dot || "bg-slate-400"}" aria-hidden="true"></span>
+          <span class="font-medium truncate flex-1">${escHTML(e.title)}</span>
           ${tag}
-          <span class="dark:text-gray-500 text-gray-400 ml-auto text-xs">${e.time || ""}</span>
+          <span class="dark:text-slate-300 text-gray-600 text-xs shrink-0">${escHTML(e.time || "")}</span>
         </div>`;
       })
       .join("");
   }
 
-  /* ───── Render Events List ───── */
+  /* ───── Filtered Events Extraction ───── */
 
   function getFilteredEvents() {
     let events = loadEvents();
@@ -236,11 +355,18 @@ See you there! 🙌`;
     const cat = categoryFilter.value;
     const dateVal = dateFilter.value;
 
-    if (search) events = events.filter((e) => e.title.toLowerCase().includes(search) || (e.venue && e.venue.toLowerCase().includes(search)));
+    if (search) {
+      events = events.filter(
+        (e) =>
+          e.title.toLowerCase().includes(search) ||
+          (e.venue && e.venue.toLowerCase().includes(search)) ||
+          (e.notes && e.notes.toLowerCase().includes(search))
+      );
+    }
     if (cat !== "All") events = events.filter((e) => e.category === cat);
     if (dateVal) events = events.filter((e) => e.date === dateVal);
 
-    // Sort: urgent first, then by date ascending
+    // Sort: Urgent items first, then chronologically by date
     events.sort((a, b) => {
       const pa = priority(a.date) === "Urgent" ? 0 : priority(a.date) === "Upcoming" ? 1 : 2;
       const pb = priority(b.date) === "Urgent" ? 0 : priority(b.date) === "Upcoming" ? 1 : 2;
@@ -250,55 +376,67 @@ See you there! 🙌`;
     return events;
   }
 
+  /* ───── Event Card HTML Template ───── */
+
   function eventCardHTML(e) {
     const p = priority(e.date);
     const badge = PRIORITY_BADGES[p];
     const cat = CAT_COLORS[e.category] || CAT_COLORS.Other;
     const rel = relDay(e.date);
 
-    return `<div class="theme-transition rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 hover:border-teal-500/40 transition fade-in">
-      <div class="flex items-start justify-between gap-2 mb-2">
-        <h4 class="font-semibold text-sm leading-tight flex-1">${escHTML(e.title)}</h4>
-        <span class="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium ${badge.classes}">${badge.label}</span>
+    return `<article class="theme-transition rounded-2xl p-4 sm:p-5 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 hover:border-teal-500/50 shadow-sm transition fade-in" aria-label="${escAttr(e.title)}">
+      <div class="flex items-start justify-between gap-2.5 mb-2.5">
+        <h3 class="font-bold text-sm sm:text-base leading-snug flex-1">${escHTML(e.title)}</h3>
+        <span class="shrink-0 text-xs px-2.5 py-0.5 rounded-full font-semibold ${badge.classes}">${escHTML(badge.label)}</span>
       </div>
-      <div class="space-y-1 text-xs dark:text-gray-400 text-gray-500">
-        <div class="flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-          ${fmtDate(e.date)}${rel ? ` <span class="text-teal-400 font-medium">(${rel})</span>` : ""}
+      <div class="space-y-1.5 text-xs sm:text-sm dark:text-slate-300 text-gray-600">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span>${fmtDate(e.date)}${rel ? ` <strong class="text-teal-400 font-semibold">(${escHTML(rel)})</strong>` : ""}</span>
         </div>
-        ${e.time ? `<div class="flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          ${escHTML(e.time)}</div>` : ""}
-        ${e.venue ? `<div class="flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          ${escHTML(e.venue)}</div>` : ""}
-        ${e.notes ? `<div class="flex items-start gap-1.5 mt-1 pt-1 border-t dark:border-dark-600 border-gray-100">
-          <svg class="w-3.5 h-3.5 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span class="italic">${escHTML(e.notes)}</span></div>` : ""}
+        ${e.time ? `<div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>${escHTML(e.time)}</span></div>` : ""}
+        ${e.venue ? `<div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <span>${escHTML(e.venue)}</span></div>` : ""}
+        ${e.notes ? `<div class="flex items-start gap-2 mt-2 pt-2 border-t dark:border-dark-600 border-gray-100">
+          <svg class="w-4 h-4 text-teal-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-xs dark:text-slate-300 text-gray-700 italic">${escHTML(e.notes)}</span></div>` : ""}
       </div>
-      <div class="flex items-center justify-between mt-3">
-        <span class="text-[10px] px-2 py-0.5 rounded-full ${cat.bg} ${cat.text} ${cat.border} border font-medium">${e.category}</span>
-        <div class="flex gap-1">
-          <button onclick="window._editEvent('${e.id}')" class="p-1.5 rounded-lg dark:hover:bg-dark-600 hover:bg-gray-200 transition" title="Edit">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      <div class="flex items-center justify-between mt-4 pt-2 border-t dark:border-dark-600/60 border-gray-100">
+        <span class="text-xs px-2.5 py-0.5 rounded-full ${cat.bg} ${cat.text} ${cat.border} border font-medium">${escHTML(e.category)}</span>
+        <div class="flex gap-1.5">
+          <button
+            type="button"
+            onclick="window._editEvent('${escAttr(e.id)}')"
+            class="p-2 rounded-lg dark:hover:bg-dark-600 hover:bg-gray-100 text-slate-300 hover:text-white transition"
+            aria-label="Edit event: ${escAttr(e.title)}"
+            title="Edit event"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
           </button>
-          <button onclick="window._deleteEvent('${e.id}')" class="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 transition" title="Delete">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          <button
+            type="button"
+            onclick="window._deleteEvent('${escAttr(e.id)}')"
+            class="p-2 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition"
+            aria-label="Delete event: ${escAttr(e.title)}"
+            title="Delete event"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
           </button>
         </div>
       </div>
-    </div>`;
+    </article>`;
   }
 
-  function escHTML(s) {
-    const d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
-  }
+  /* ───── Render List View ───── */
 
   function renderList() {
     const events = getFilteredEvents();
-    if (events.length === 0 && loadEvents().length === 0) {
+    const allEvents = loadEvents();
+
+    if (events.length === 0 && allEvents.length === 0) {
       listView.classList.add("hidden");
       emptyState.classList.remove("hidden");
       return;
@@ -306,15 +444,16 @@ See you there! 🙌`;
     emptyState.classList.add("hidden");
 
     if (events.length === 0) {
-      listView.innerHTML = `<div class="col-span-full text-center py-8 dark:text-gray-500 text-gray-400 text-sm">No events match your filters.</div>`;
+      listView.innerHTML = `<div class="col-span-full text-center py-8 dark:text-slate-400 text-gray-500 text-sm">No events match your search or filter criteria.</div>`;
       listView.classList.remove("hidden");
       return;
     }
+
     listView.innerHTML = events.map(eventCardHTML).join("");
     listView.classList.remove("hidden");
   }
 
-  /* ───── Calendar View ───── */
+  /* ───── Full Calendar View ───── */
 
   function renderCalendarView() {
     const events = getFilteredEvents();
@@ -322,75 +461,98 @@ See you there! 🙌`;
     const year = now.getFullYear();
     const month = now.getMonth();
 
-    // Build full month grid
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const todayDate = now.getDate();
 
-    // Map events to days
     const dayMap = {};
     events.forEach((e) => {
-      const d = new Date(e.date + "T00:00:00");
-      if (d.getFullYear() === year && d.getMonth() === month) {
-        const day = d.getDate();
-        if (!dayMap[day]) dayMap[day] = [];
-        dayMap[day].push(e);
+      const [y, m, d] = e.date.split("-").map(Number);
+      if (y === year && m === month + 1) {
+        if (!dayMap[d]) dayMap[d] = [];
+        dayMap[d].push(e);
       }
     });
 
     const monthName = new Date(year, month).toLocaleString("default", { month: "long", year: "numeric" });
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    let html = `<div class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200">
-      <h3 class="font-semibold mb-3">${monthName}</h3>
-      <div class="grid grid-cols-7 gap-1 text-center">`;
+    let html = `<div class="rounded-2xl p-4 sm:p-5 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 shadow-sm">
+      <h3 class="font-bold text-base mb-3">${escHTML(monthName)}</h3>
+      <div class="grid grid-cols-7 gap-1.5 text-center" role="grid">`;
 
     dayNames.forEach((d) => {
-      html += `<div class="text-xs font-medium dark:text-gray-500 text-gray-400 py-1">${d}</div>`;
+      html += `<div class="text-xs font-semibold dark:text-slate-400 text-gray-600 py-1" role="columnheader">${d}</div>`;
     });
 
-    for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+    for (let i = 0; i < firstDay; i++) {
+      html += `<div class="p-2" aria-hidden="true"></div>`;
+    }
 
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = d === todayDate;
-      const hasEvents = dayMap[d] && dayMap[d].length > 0;
-      html += `<div class="relative py-2 rounded-lg ${isToday ? "bg-teal-500/20 font-bold text-teal-400" : ""} ${hasEvents ? "cursor-pointer dark:hover:bg-dark-600 hover:bg-gray-100" : ""} text-sm" ${hasEvents ? `onclick="window._showCalDay(${year},${month},${d})"` : ""}>
-        ${d}
-        ${hasEvents ? `<div class="flex justify-center gap-0.5 mt-0.5">${dayMap[d].slice(0, 3).map((e) => `<span class="cal-dot ${CAT_COLORS[e.category]?.dot || "bg-gray-400"}"></span>`).join("")}</div>` : ""}
-      </div>`;
+      const count = dayMap[d] ? dayMap[d].length : 0;
+      const hasEvents = count > 0;
+
+      if (hasEvents) {
+        html += `<button
+          type="button"
+          class="relative p-2 rounded-xl text-sm font-semibold transition border ${
+            isToday
+              ? "bg-teal-500/20 border-teal-500 text-teal-300"
+              : "dark:bg-dark-800 bg-gray-50 dark:hover:bg-dark-600 hover:bg-gray-100 border-transparent"
+          }"
+          onclick="window._showCalDay(${year},${month},${d})"
+          aria-label="${d} ${monthName}, ${count} events"
+        >
+          <span>${d}</span>
+          <div class="flex justify-center gap-1 mt-1">
+            ${dayMap[d].slice(0, 3).map((e) => `<span class="cal-dot ${CAT_COLORS[e.category]?.dot || "bg-slate-400"}" aria-hidden="true"></span>`).join("")}
+          </div>
+        </button>`;
+      } else {
+        html += `<div class="p-2 rounded-xl text-sm ${isToday ? "bg-teal-500/10 font-bold text-teal-400" : "dark:text-slate-400 text-gray-500"}">${d}</div>`;
+      }
     }
 
     html += `</div></div>`;
 
-    // Show event details below for selected day or today
-    const showDay = dayMap[todayDate] ? todayDate : Object.keys(dayMap).map(Number).sort((a, b) => a - b)[0];
+    const showDay = dayMap[todayDate]
+      ? todayDate
+      : Object.keys(dayMap).map(Number).sort((a, b) => a - b)[0];
+
     if (showDay && dayMap[showDay]) {
-      html += `<div class="mt-4 space-y-2" id="calDayEvents">`;
-      html += `<h4 class="text-sm font-semibold dark:text-gray-300 text-gray-600">${new Date(year, month, showDay).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</h4>`;
-      dayMap[showDay].forEach((e) => { html += eventCardHTML(e); });
-      html += `</div>`;
+      const dayHeader = fmtDate(`${year}-${String(month + 1).padStart(2, "0")}-${String(showDay).padStart(2, "0")}`);
+      html += `<div class="mt-4 space-y-3" id="calDayEvents">
+        <h4 class="text-sm font-bold text-teal-400">${escHTML(dayHeader)}</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${dayMap[showDay].map(eventCardHTML).join("")}
+        </div>
+      </div>`;
     }
 
     calendarView.innerHTML = html;
   }
 
   window._showCalDay = function (year, month, day) {
-    const events = getFilteredEvents().filter((e) => {
-      const d = new Date(e.date + "T00:00:00");
-      return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
-    });
+    const formatted = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const events = getFilteredEvents().filter((e) => e.date === formatted);
+
     let existing = document.getElementById("calDayEvents");
     if (!existing) {
       existing = document.createElement("div");
       existing.id = "calDayEvents";
-      existing.className = "mt-4 space-y-2";
+      existing.className = "mt-4 space-y-3";
       calendarView.appendChild(existing);
     }
-    existing.innerHTML = `<h4 class="text-sm font-semibold dark:text-gray-300 text-gray-600">${new Date(year, month, day).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</h4>` +
-      (events.length ? events.map(eventCardHTML).join("") : `<p class="text-sm dark:text-gray-500 text-gray-400">No events on this day.</p>`);
+    const dayHeader = fmtDate(formatted);
+    existing.innerHTML = `<h4 class="text-sm font-bold text-teal-400">${escHTML(dayHeader)}</h4>` +
+      (events.length
+        ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${events.map(eventCardHTML).join("")}</div>`
+        : `<p class="text-sm dark:text-slate-400 text-gray-500">No events found on this date.</p>`);
   };
 
-  /* ───── Mini Calendar ───── */
+  /* ───── Mini Calendar in Sidebar ───── */
 
   function renderMiniCal() {
     const year = miniCalDate.getFullYear();
@@ -400,26 +562,33 @@ See you there! 🙌`;
     const events = loadEvents();
     const eventDays = new Set();
     events.forEach((e) => {
-      const d = new Date(e.date + "T00:00:00");
-      if (d.getFullYear() === year && d.getMonth() === month) eventDays.add(d.getDate());
+      const [y, m, d] = e.date.split("-").map(Number);
+      if (y === year && m === month + 1) eventDays.add(d);
     });
 
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const todayObj = new Date(todayISO() + "T00:00:00");
-    const isCurrentMonth = todayObj.getFullYear() === year && todayObj.getMonth() === month;
-    const todayDate = todayObj.getDate();
+    const todayStr = todayISO();
+    const [tY, tM, tD] = todayStr.split("-").map(Number);
+    const isCurrentMonth = tY === year && tM === month + 1;
 
     const dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-    let html = dayNames.map((d) => `<div class="font-medium dark:text-gray-500 text-gray-400 py-1">${d}</div>`).join("");
+    let html = dayNames
+      .map((d) => `<div class="font-semibold dark:text-slate-400 text-gray-600 py-1" role="columnheader">${d}</div>`)
+      .join("");
 
-    for (let i = 0; i < firstDay; i++) html += `<div></div>`;
+    for (let i = 0; i < firstDay; i++) {
+      html += `<div aria-hidden="true"></div>`;
+    }
+
     for (let d = 1; d <= daysInMonth; d++) {
-      const isToday = isCurrentMonth && d === todayDate;
+      const isToday = isCurrentMonth && d === tD;
       const hasEvent = eventDays.has(d);
-      html += `<div class="relative py-1 rounded ${isToday ? "bg-teal-500 text-white font-bold" : ""} ${hasEvent && !isToday ? "font-semibold dark:text-teal-400 text-teal-600" : ""}">
-        ${d}
-        ${hasEvent ? `<div class="absolute bottom-0 left-1/2 -translate-x-1/2"><span class="cal-dot ${isToday ? "bg-white" : "bg-teal-400"}"></span></div>` : ""}
+      html += `<div class="relative py-1 rounded-lg ${
+        isToday ? "bg-teal-500 text-white font-bold" : ""
+      } ${hasEvent && !isToday ? "font-bold text-teal-400" : "dark:text-slate-300 text-gray-700"}">
+        <span>${d}</span>
+        ${hasEvent ? `<div class="absolute bottom-0.5 left-1/2 -translate-x-1/2"><span class="cal-dot ${isToday ? "bg-white" : "bg-teal-400"}" aria-hidden="true"></span></div>` : ""}
       </div>`;
     }
     miniCalGrid.innerHTML = html;
@@ -429,24 +598,26 @@ See you there! 🙌`;
     miniCalDate.setMonth(miniCalDate.getMonth() - 1);
     renderMiniCal();
   });
+
   nextMonthBtn.addEventListener("click", () => {
     miniCalDate.setMonth(miniCalDate.getMonth() + 1);
     renderMiniCal();
   });
 
-  /* ───── Stats ───── */
+  /* ───── Statistics ───── */
 
   function renderStats() {
     const events = loadEvents();
     statTotal.textContent = events.length;
     statUrgent.textContent = events.filter((e) => priority(e.date) === "Urgent").length;
-    // This week (today through next 7 days in Asia/Kolkata)
+
+    // 7-day range in Asia/Kolkata
     const startStr = todayISO();
     const endStr = addDays(startStr, 7);
     statWeek.textContent = events.filter((e) => e.date >= startStr && e.date <= endStr).length;
   }
 
-  /* ───── Full re-render ───── */
+  /* ───── Full Re-render Orchestration ───── */
 
   function renderAll() {
     renderAttention();
@@ -463,40 +634,52 @@ See you there! 🙌`;
     renderStats();
   }
 
-  /* ───── View Toggle ───── */
+  /* ───── View Switcher ───── */
 
   listViewBtn.addEventListener("click", () => {
     currentView = "list";
     listViewBtn.classList.add("dark:bg-teal-600", "bg-teal-500", "text-white");
-    listViewBtn.classList.remove("dark:bg-dark-700", "bg-gray-100", "dark:text-gray-300", "text-gray-700");
+    listViewBtn.classList.remove("dark:bg-dark-700", "bg-gray-100", "dark:text-slate-200", "text-gray-700");
+    listViewBtn.setAttribute("aria-pressed", "true");
+
     calViewBtn.classList.remove("dark:bg-teal-600", "bg-teal-500", "text-white");
-    calViewBtn.classList.add("dark:bg-dark-700", "bg-gray-100", "dark:text-gray-300", "text-gray-700");
+    calViewBtn.classList.add("dark:bg-dark-700", "bg-gray-100", "dark:text-slate-200", "text-gray-700");
+    calViewBtn.setAttribute("aria-pressed", "false");
+
     renderAll();
   });
 
   calViewBtn.addEventListener("click", () => {
     currentView = "calendar";
     calViewBtn.classList.add("dark:bg-teal-600", "bg-teal-500", "text-white");
-    calViewBtn.classList.remove("dark:bg-dark-700", "bg-gray-100", "dark:text-gray-300", "text-gray-700");
+    calViewBtn.classList.remove("dark:bg-dark-700", "bg-gray-100", "dark:text-slate-200", "text-gray-700");
+    calViewBtn.setAttribute("aria-pressed", "true");
+
     listViewBtn.classList.remove("dark:bg-teal-600", "bg-teal-500", "text-white");
-    listViewBtn.classList.add("dark:bg-dark-700", "bg-gray-100", "dark:text-gray-300", "text-gray-700");
+    listViewBtn.classList.add("dark:bg-dark-700", "bg-gray-100", "dark:text-slate-200", "text-gray-700");
+    listViewBtn.setAttribute("aria-pressed", "false");
+
     renderAll();
   });
 
-  /* ───── Filters ───── */
+  /* ───── Debounced Search & Instant Filters ───── */
 
-  searchInput.addEventListener("input", renderAll);
+  searchInput.addEventListener("input", debounce(renderAll, 200));
   categoryFilter.addEventListener("change", renderAll);
   dateFilter.addEventListener("change", renderAll);
 
-  /* ───── Extract ───── */
+  /* ───── AI Extract Events ───── */
 
   extractBtn.addEventListener("click", async () => {
     const text = pasteInput.value.trim();
-    if (!text) { showExtractError("Please paste some text first."); return; }
+    if (!text) {
+      showExtractError("Please paste some text first before extracting.");
+      return;
+    }
 
     extractSpinner.classList.remove("hidden");
     extractBtn.disabled = true;
+    extractBtn.classList.add("opacity-60", "cursor-not-allowed");
     hideExtractError();
     extractedPreview.classList.add("hidden");
 
@@ -507,14 +690,17 @@ See you there! 🙌`;
         body: JSON.stringify({ text }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Extraction failed");
-      if (!data.events || data.events.length === 0) throw new Error("No events found in the text.");
+      if (!res.ok) throw new Error(data.error || "Event extraction failed.");
+      if (!data.events || data.events.length === 0) {
+        throw new Error("No campus events or dates could be identified in the text.");
+      }
       showExtractedPreview(data.events);
     } catch (err) {
-      showExtractError(err.message);
+      showExtractError(err.message || "An unexpected error occurred while extracting events.");
     } finally {
       extractSpinner.classList.add("hidden");
       extractBtn.disabled = false;
+      extractBtn.classList.remove("opacity-60", "cursor-not-allowed");
     }
   });
 
@@ -522,7 +708,9 @@ See you there! 🙌`;
     extractError.textContent = msg;
     extractError.classList.remove("hidden");
   }
+
   function hideExtractError() {
+    extractError.textContent = "";
     extractError.classList.add("hidden");
   }
 
@@ -530,46 +718,65 @@ See you there! 🙌`;
     extractedPreview.classList.remove("hidden");
     extractedCards.innerHTML = events
       .map((e, i) => {
-        const cat = CAT_COLORS[e.category] || CAT_COLORS.Other;
-        return `<div class="theme-transition rounded-2xl p-4 dark:bg-dark-800 bg-gray-50 border dark:border-dark-600 border-gray-200 fade-in" data-idx="${i}">
-        <div class="space-y-2">
-          <input value="${escAttr(e.title)}" data-field="title" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm font-semibold border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
-          <div class="grid grid-cols-2 gap-2">
-            <input type="date" value="${e.date}" data-field="date" class="theme-transition rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
-            <input value="${escAttr(e.time)}" data-field="time" placeholder="Time" class="theme-transition rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
+        return `<div class="theme-transition rounded-2xl p-4 sm:p-5 dark:bg-dark-800 bg-gray-50 border dark:border-dark-600 border-gray-200 fade-in" data-idx="${i}">
+        <div class="space-y-2.5">
+          <div>
+            <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Title</label>
+            <input value="${escAttr(e.title)}" data-field="title" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm font-semibold border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
-          <input value="${escAttr(e.venue)}" data-field="venue" placeholder="Venue" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
-          <select data-field="category" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50">
-            ${CATEGORIES.map((c) => `<option ${c === e.category ? "selected" : ""}>${c}</option>`).join("")}
-          </select>
-          <textarea data-field="notes" rows="2" placeholder="Notes (instructions, what to bring, links, etc.)" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none">${escHTML(e.notes || "")}</textarea>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Date</label>
+              <input type="date" value="${escAttr(e.date)}" data-field="date" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Time</label>
+              <input value="${escAttr(e.time)}" data-field="time" placeholder="Time" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Venue</label>
+            <input value="${escAttr(e.venue)}" data-field="venue" placeholder="Venue location" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Category</label>
+            <select data-field="category" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500">
+              ${CATEGORIES.map((c) => `<option ${c === e.category ? "selected" : ""}>${escHTML(c)}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Notes &amp; Instructions</label>
+            <textarea data-field="notes" rows="2" placeholder="Instructions, requirements, or links" class="theme-transition w-full rounded-lg dark:bg-dark-700 bg-white dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none">${escHTML(e.notes || "")}</textarea>
+          </div>
         </div>
-        <button onclick="window._saveExtracted(this)" class="mt-3 px-4 py-1.5 text-sm rounded-lg bg-teal-500 hover:bg-teal-600 text-white transition w-full font-medium">Save Event</button>
+        <button
+          type="button"
+          onclick="window._saveExtracted(this)"
+          class="mt-3 px-4 py-2 text-sm font-semibold rounded-lg bg-teal-500 hover:bg-teal-600 text-white transition w-full shadow-sm"
+        >
+          Save Event
+        </button>
       </div>`;
       })
       .join("");
   }
 
-  function escAttr(s) {
-    return (s || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-  }
-
   window._saveExtracted = function (btn) {
     const card = btn.closest("[data-idx]");
     const ev = {
-      title: card.querySelector('[data-field="title"]').value.trim() || "Untitled",
-      date: card.querySelector('[data-field="date"]').value,
+      title: card.querySelector('[data-field="title"]').value.trim() || "Untitled Event",
+      date: card.querySelector('[data-field="date"]').value || todayISO(),
       time: card.querySelector('[data-field="time"]').value.trim(),
       venue: card.querySelector('[data-field="venue"]').value.trim(),
       category: card.querySelector('[data-field="category"]').value,
       notes: (card.querySelector('[data-field="notes"]')?.value || "").trim(),
     };
     addEvent(ev);
-    card.innerHTML = `<div class="text-center py-3 text-teal-400 font-medium text-sm fade-in">✓ Saved!</div>`;
+    card.innerHTML = `<div class="text-center py-4 text-teal-400 font-bold text-sm fade-in" role="status">✓ Event Saved Successfully!</div>`;
     renderAll();
   };
 
-  /* ───── Sample fill ───── */
+  /* ───── Sample Data Helpers ───── */
 
   sampleBtn.addEventListener("click", () => {
     pasteInput.value = sampleNotice();
@@ -581,62 +788,89 @@ See you there! 🙌`;
     renderAll();
   });
 
-  /* ───── Edit / Delete ───── */
+  /* ───── Event Edit Modal Management ───── */
 
   window._editEvent = function (id) {
     const events = loadEvents();
     const ev = events.find((e) => e.id === id);
     if (!ev) return;
+
+    lastActiveElementBeforeModal = document.activeElement;
+
     editId.value = id;
     editTitle.value = ev.title;
     editDate.value = ev.date;
-    editTime.value = ev.time;
-    editVenue.value = ev.venue;
-    editCategory.value = ev.category;
+    editTime.value = ev.time || "";
+    editVenue.value = ev.venue || "";
+    editCategory.value = ev.category || "Other";
     editNotes.value = ev.notes || "";
+
     editModal.classList.remove("hidden");
+    editTitle.focus();
   };
 
   window._deleteEvent = function (id) {
-    if (!confirm("Delete this event?")) return;
+    const events = loadEvents();
+    const ev = events.find((e) => e.id === id);
+    const title = ev ? ev.title : "this event";
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
     deleteEvent(id);
     renderAll();
   };
 
-  editCancel.addEventListener("click", () => editModal.classList.add("hidden"));
-  editOverlay.addEventListener("click", () => editModal.classList.add("hidden"));
+  function closeEditModal() {
+    editModal.classList.add("hidden");
+    if (lastActiveElementBeforeModal && typeof lastActiveElementBeforeModal.focus === "function") {
+      lastActiveElementBeforeModal.focus();
+    }
+  }
 
-  editSave.addEventListener("click", () => {
+  editCancel.addEventListener("click", closeEditModal);
+  editOverlay.addEventListener("click", closeEditModal);
+
+  // Close modal with Escape key
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !editModal.classList.contains("hidden")) {
+      closeEditModal();
+    }
+  });
+
+  editForm.addEventListener("submit", (e) => {
+    e.preventDefault();
     updateEvent(editId.value, {
-      title: editTitle.value.trim() || "Untitled",
+      title: editTitle.value.trim() || "Untitled Event",
       date: editDate.value,
       time: editTime.value.trim(),
       venue: editVenue.value.trim(),
       category: editCategory.value,
       notes: editNotes.value.trim(),
     });
-    editModal.classList.add("hidden");
+    closeEditModal();
     renderAll();
   });
 
-  /* ───── AI Digest ───── */
+  /* ───── AI Weekly Digest Generation ───── */
 
   digestBtn.addEventListener("click", async () => {
     const events = loadEvents();
-    // Filter to this week: today through the next 7 days (Asia/Kolkata)
+    // 7-day range in Asia/Kolkata
     const startStr = todayISO();
     const endStr = addDays(startStr, 7);
     const weekEvents = events.filter((e) => e.date >= startStr && e.date <= endStr);
 
-    console.log(`[AI Digest] Found ${weekEvents.length} events for date range: ${startStr} to ${endStr}`, weekEvents);
+    console.log(
+      `[AI Digest] Found ${weekEvents.length} events for date range: ${startStr} to ${endStr}`,
+      weekEvents
+    );
 
     if (weekEvents.length === 0) {
-      digestText.textContent = "No events this week. Enjoy the break! 😊";
+      digestText.textContent = "No events scheduled for the next 7 days. Enjoy the break! 😊";
       return;
     }
 
     digestSpinner.classList.remove("hidden");
     digestBtn.disabled = true;
+    digestBtn.classList.add("opacity-60", "cursor-not-allowed");
     digestText.textContent = "";
 
     try {
@@ -646,22 +880,24 @@ See you there! 🙌`;
         body: JSON.stringify({ events: weekEvents }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Summary failed");
+      if (!res.ok) throw new Error(data.error || "Unable to generate summary digest.");
+
+      // Set securely with textContent to avoid XSS
       digestText.textContent = data.summary;
     } catch (err) {
-      digestText.textContent = "Couldn't generate digest right now. " + err.message;
+      digestText.textContent = "Couldn't generate digest right now. " + (err.message || "");
     } finally {
       digestSpinner.classList.add("hidden");
       digestBtn.disabled = false;
+      digestBtn.classList.remove("opacity-60", "cursor-not-allowed");
     }
   });
 
-  /* ───── Init ───── */
+  /* ───── Initialization ───── */
 
   function init() {
     initTheme();
 
-    // Load pre-existing sample events on first visit
     if (loadEvents().length === 0) {
       const firstVisit = !localStorage.getItem("campusPulse_visited");
       if (firstVisit) {
@@ -675,4 +911,3 @@ See you there! 🙌`;
 
   init();
 })();
-

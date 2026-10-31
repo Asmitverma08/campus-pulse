@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Campus Pulse</title>
+  <title>Campus Pulse – AI Campus Life &amp; Event Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -29,222 +29,445 @@
     };
   </script>
   <style>
-    /* Scrollbar */
+    /* Custom accessible scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    /* Calendar dot */
-    .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
-    /* Spinner */
-    .spinner { border: 3px solid rgba(255,255,255,0.1); border-top-color: #14b8a6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.7s linear infinite; display: inline-block; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    /* Calendar dot indicator */
+    .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    /* Loading spinner */
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #14b8a6;
+      border-radius: 50%;
+      width: 22px;
+      height: 22px;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
     @keyframes spin { to { transform: rotate(360deg); } }
-    /* Fade-in */
-    .fade-in { animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    /* Animation fade in */
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
     /* Smooth transitions */
-    .theme-transition { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+    .theme-transition { transition: background-color 0.2s, color 0.2s, border-color 0.2s; }
+    /* Visible high-contrast focus outlines for WCAG AA */
+    :focus-visible {
+      outline: 2px solid #2dd4bf !important;
+      outline-offset: 2px !important;
+    }
+    /* Respect user accessibility motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
-<body class="theme-transition bg-dark-900 text-gray-100 dark:bg-dark-900 dark:text-gray-100 bg-gray-50 text-gray-900 min-h-screen">
+<body class="theme-transition bg-dark-900 text-gray-100 dark:bg-dark-900 dark:text-gray-100 bg-gray-50 text-gray-900 min-h-screen flex flex-col font-sans">
 
-  <!-- ───── TOP NAV ───── -->
-  <nav class="theme-transition sticky top-0 z-50 dark:bg-dark-800/95 bg-white/95 backdrop-blur border-b dark:border-dark-600 border-gray-200">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-      <!-- Logo -->
-      <div class="flex items-center gap-2 shrink-0">
-        <div class="w-8 h-8 rounded-lg bg-teal-500 flex items-center justify-center font-bold text-white text-lg">C</div>
-        <span class="text-lg font-bold hidden sm:inline">Campus Pulse</span>
+  <!-- Accessible Skip Link -->
+  <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:bg-teal-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:font-semibold">
+    Skip to main content
+  </a>
+
+  <!-- ───── HEADER & TOP NAVIGATION ───── -->
+  <header class="theme-transition sticky top-0 z-40 dark:bg-dark-800/95 bg-white/95 backdrop-blur border-b dark:border-dark-600 border-gray-200 shadow-sm">
+    <nav class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4" aria-label="Main Navigation">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="w-9 h-9 rounded-xl bg-teal-500 flex items-center justify-center font-black text-white text-lg shadow-sm" aria-hidden="true">
+          C
+        </div>
+        <h1 class="text-lg font-bold tracking-tight text-teal-400 hidden sm:inline">
+          Campus Pulse
+        </h1>
       </div>
-      <!-- Search -->
+
+      <!-- Search Input -->
       <div class="flex-1 max-w-md">
         <div class="relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input id="searchInput" type="text" placeholder="Search events…" class="theme-transition w-full pl-10 pr-4 py-2 rounded-xl dark:bg-dark-700 bg-gray-100 dark:text-gray-100 text-gray-800 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
+          <label for="searchInput" class="sr-only">Search saved events by title or venue</label>
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            id="searchInput"
+            type="search"
+            placeholder="Search events by title or venue…"
+            class="theme-transition w-full pl-10 pr-4 py-2 rounded-xl dark:bg-dark-700 bg-gray-100 dark:text-gray-100 text-gray-900 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
         </div>
       </div>
-      <!-- Theme toggle -->
-      <button id="themeToggle" class="p-2 rounded-lg dark:hover:bg-dark-600 hover:bg-gray-200 transition" title="Toggle light/dark mode">
-        <svg id="moonIcon" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-        <svg id="sunIcon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+
+      <!-- Theme Switcher -->
+      <button
+        id="themeToggle"
+        type="button"
+        class="p-2 rounded-xl border dark:border-dark-600 border-gray-300 dark:hover:bg-dark-600 hover:bg-gray-100 transition"
+        aria-label="Switch between light and dark theme"
+        title="Toggle dark or light theme"
+      >
+        <svg id="moonIcon" class="w-5 h-5 hidden dark:block text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+        </svg>
+        <svg id="sunIcon" class="w-5 h-5 block dark:hidden text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
       </button>
-    </div>
-  </nav>
+    </nav>
+  </header>
 
-  <!-- ───── MAIN LAYOUT ───── -->
-  <main class="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
+  <!-- ───── MAIN CONTENT ───── -->
+  <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
 
-    <!-- LEFT COLUMN -->
+    <!-- PRIMARY COLUMN -->
     <div class="flex-1 min-w-0 space-y-6">
 
-      <!-- NEEDS ATTENTION BANNER -->
-      <div id="attentionBanner" class="hidden fade-in rounded-2xl p-4 dark:bg-gradient-to-r dark:from-teal-700/30 dark:to-dark-700 bg-gradient-to-r from-teal-50 to-white border dark:border-teal-700/40 border-teal-200">
-        <h3 class="font-semibold text-teal-400 flex items-center gap-2 mb-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          Needs attention today
-        </h3>
-        <div id="attentionList" class="space-y-1 text-sm"></div>
-      </div>
+      <!-- NEEDS ATTENTION TODAY BANNER -->
+      <section
+        id="attentionBanner"
+        class="hidden fade-in rounded-2xl p-4 dark:bg-gradient-to-r dark:from-teal-900/40 dark:to-dark-700 bg-gradient-to-r from-teal-50 to-white border dark:border-teal-600/40 border-teal-300"
+        aria-labelledby="attention-heading"
+      >
+        <h2 id="attention-heading" class="font-bold text-teal-400 flex items-center gap-2 mb-2 text-sm sm:text-base">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Needs attention today &amp; urgent
+        </h2>
+        <div id="attentionList" class="space-y-1.5 text-sm" role="list"></div>
+      </section>
 
       <!-- AI WEEKLY DIGEST BANNER -->
-      <div id="digestBanner" class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold flex items-center gap-2">
-            <span class="text-lg">✨</span> AI Weekly Digest
-          </h3>
-          <button id="digestBtn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal-500 hover:bg-teal-600 text-white transition">
+      <section
+        id="digestBanner"
+        class="rounded-2xl p-4 sm:p-5 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 shadow-sm"
+        aria-labelledby="digest-heading"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+          <h2 id="digest-heading" class="font-bold text-base flex items-center gap-2">
+            <span class="text-lg" aria-hidden="true">✨</span> AI Weekly Digest
+          </h2>
+          <button
+            id="digestBtn"
+            type="button"
+            class="px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white transition self-start sm:self-auto shadow-sm"
+            aria-label="Generate AI weekly digest for your upcoming week"
+          >
             What do I need to know this week?
           </button>
         </div>
-        <p id="digestText" class="text-sm dark:text-gray-400 text-gray-500">Click the button to get your personalised weekly digest powered by AI.</p>
-        <div id="digestSpinner" class="hidden mt-2"><span class="spinner"></span></div>
-      </div>
+        <p id="digestText" class="text-sm dark:text-slate-300 text-gray-700 leading-relaxed">
+          Click the button to get your personalized weekly digest powered by AI.
+        </p>
+        <div id="digestSpinner" class="hidden mt-3 flex items-center gap-2" role="status" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="text-xs text-teal-400">Crafting your digest with Gemini…</span>
+        </div>
+      </section>
 
-      <!-- PASTE NOTICE INPUT -->
-      <div class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200">
-        <h3 class="font-semibold mb-2 flex items-center gap-2">
-          <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <!-- SMART INPUT: PASTE NOTICE -->
+      <section
+        class="rounded-2xl p-4 sm:p-5 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 shadow-sm"
+        aria-labelledby="paste-heading"
+      >
+        <h2 id="paste-heading" class="font-bold text-base mb-1 flex items-center gap-2">
+          <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+          </svg>
           Paste a notice
-        </h3>
-        <p class="text-xs dark:text-gray-400 text-gray-500 mb-3">Paste a WhatsApp forward, email, or poster caption and let AI extract the event details.</p>
-        <textarea id="pasteInput" rows="4" placeholder="e.g. &quot;Hey guys! Coding club meeting tmrw at 5pm in Lab 3. Don't miss it! Also there's a cultural fest this Saturday at the auditorium from 2-6pm&quot;" class="theme-transition w-full rounded-xl dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-3 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none"></textarea>
-        <div class="flex items-center gap-2 mt-2">
-          <button id="extractBtn" class="px-4 py-2 text-sm font-medium rounded-xl bg-teal-500 hover:bg-teal-600 text-white transition flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </h2>
+        <p class="text-xs dark:text-slate-300 text-gray-600 mb-3">
+          Paste any forwarded WhatsApp notice, email, or event caption. AI will extract title, dates, venue, category, and instructions.
+        </p>
+        <label for="pasteInput" class="sr-only">Notice text to extract events from</label>
+        <textarea
+          id="pasteInput"
+          rows="4"
+          placeholder="e.g. &quot;Coding club meet tmrw 5pm in Lab 3, bring your laptops!! Also midterm review extra class this Friday at 10am in Room 204.&quot;"
+          class="theme-transition w-full rounded-xl dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-3 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+        ></textarea>
+        <div class="flex flex-wrap items-center gap-2.5 mt-3">
+          <button
+            id="extractBtn"
+            type="button"
+            class="px-4 py-2 text-sm font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white transition flex items-center gap-2 shadow-sm"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
             Extract Events
           </button>
-          <button id="sampleBtn" class="px-4 py-2 text-sm font-medium rounded-xl dark:bg-dark-600 bg-gray-200 dark:hover:bg-dark-500 hover:bg-gray-300 dark:text-gray-300 text-gray-600 transition">Try a sample</button>
-          <div id="extractSpinner" class="hidden"><span class="spinner"></span></div>
+          <button
+            id="sampleBtn"
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-xl dark:bg-dark-600 bg-gray-200 dark:hover:bg-dark-500 hover:bg-gray-300 dark:text-slate-200 text-gray-700 transition"
+          >
+            Try a sample
+          </button>
+          <div id="extractSpinner" class="hidden flex items-center gap-2 ml-2" role="status" aria-live="polite">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="text-xs text-teal-400">Extracting details…</span>
+          </div>
         </div>
-        <p id="extractError" class="hidden text-red-400 text-sm mt-2"></p>
-      </div>
+        <p id="extractError" class="hidden text-red-400 text-sm mt-3 font-medium" role="alert" aria-live="assertive"></p>
+      </section>
 
-      <!-- EXTRACTED PREVIEW -->
-      <div id="extractedPreview" class="hidden space-y-3 fade-in">
-        <h3 class="font-semibold flex items-center gap-2">
-          <svg class="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <!-- EXTRACTED PREVIEW CARDS -->
+      <section
+        id="extractedPreview"
+        class="hidden space-y-3 fade-in"
+        aria-labelledby="preview-heading"
+      >
+        <h2 id="preview-heading" class="font-bold text-base flex items-center gap-2 text-teal-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
           Extracted Events — Review &amp; Save
-        </h3>
+        </h2>
         <div id="extractedCards" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
-      </div>
+      </section>
 
-      <!-- FILTERS & VIEW TOGGLE -->
-      <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-lg font-bold flex-1">Your Events</h2>
-        <select id="categoryFilter" class="theme-transition text-sm rounded-lg dark:bg-dark-700 bg-gray-100 dark:border-dark-600 border-gray-300 border px-3 py-1.5 dark:text-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/50">
-          <option value="All">All Categories</option>
-          <option value="Academic">Academic</option>
-          <option value="Cultural">Cultural</option>
-          <option value="Sports">Sports</option>
-          <option value="Club">Club</option>
-          <option value="Deadline">Deadline</option>
-          <option value="Other">Other</option>
-        </select>
-        <input id="dateFilter" type="date" class="theme-transition text-sm rounded-lg dark:bg-dark-700 bg-gray-100 dark:border-dark-600 border-gray-300 border px-3 py-1.5 dark:text-gray-300 text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
-        <div class="flex rounded-lg overflow-hidden border dark:border-dark-600 border-gray-300">
-          <button id="listViewBtn" class="px-3 py-1.5 text-sm dark:bg-teal-600 bg-teal-500 text-white transition" data-view="list">List</button>
-          <button id="calViewBtn" class="px-3 py-1.5 text-sm dark:bg-dark-700 bg-gray-100 dark:text-gray-300 text-gray-700 transition" data-view="calendar">Calendar</button>
+      <!-- FILTERS & VIEW CONTROLS -->
+      <section aria-labelledby="events-heading" class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="events-heading" class="text-lg font-bold">Your Events</h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="categoryFilter" class="sr-only">Filter by category</label>
+            <select
+              id="categoryFilter"
+              class="theme-transition text-sm rounded-lg dark:bg-dark-700 bg-gray-100 dark:border-dark-600 border-gray-300 border px-3 py-1.5 dark:text-slate-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            >
+              <option value="All">All Categories</option>
+              <option value="Academic">Academic</option>
+              <option value="Cultural">Cultural</option>
+              <option value="Sports">Sports</option>
+              <option value="Club">Club</option>
+              <option value="Deadline">Deadline</option>
+              <option value="Other">Other</option>
+            </select>
+
+            <label for="dateFilter" class="sr-only">Filter by specific date</label>
+            <input
+              id="dateFilter"
+              type="date"
+              class="theme-transition text-sm rounded-lg dark:bg-dark-700 bg-gray-100 dark:border-dark-600 border-gray-300 border px-3 py-1.5 dark:text-slate-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+
+            <!-- List / Calendar View Toggle -->
+            <div class="flex rounded-lg overflow-hidden border dark:border-dark-600 border-gray-300 shadow-sm" role="group" aria-label="Events view switcher">
+              <button
+                id="listViewBtn"
+                type="button"
+                class="px-3 py-1.5 text-sm dark:bg-teal-600 bg-teal-500 text-white font-medium transition"
+                data-view="list"
+                aria-pressed="true"
+              >
+                List
+              </button>
+              <button
+                id="calViewBtn"
+                type="button"
+                class="px-3 py-1.5 text-sm dark:bg-dark-700 bg-gray-100 dark:text-slate-200 text-gray-700 font-medium transition"
+                data-view="calendar"
+                aria-pressed="false"
+              >
+                Calendar
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <!-- EVENT LIST VIEW -->
-      <div id="listView" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- rendered by JS -->
-      </div>
+        <!-- EVENTS LIST VIEW -->
+        <div id="listView" class="grid grid-cols-1 md:grid-cols-2 gap-4" role="region" aria-label="Event Cards List">
+          <!-- Rendered dynamically -->
+        </div>
 
-      <!-- CALENDAR VIEW -->
-      <div id="calendarView" class="hidden">
-        <!-- rendered by JS — full-width calendar with event details -->
-      </div>
+        <!-- FULL CALENDAR VIEW -->
+        <div id="calendarView" class="hidden" role="region" aria-label="Calendar month grid">
+          <!-- Rendered dynamically -->
+        </div>
 
-      <!-- EMPTY STATE -->
-      <div id="emptyState" class="hidden text-center py-12 fade-in">
-        <div class="text-5xl mb-4">📋</div>
-        <h3 class="text-lg font-semibold mb-2">No events yet</h3>
-        <p class="dark:text-gray-400 text-gray-500 text-sm mb-4">Paste a notice above or add sample events to get started.</p>
-        <button id="loadSamplesBtn" class="px-4 py-2 text-sm font-medium rounded-xl bg-teal-500 hover:bg-teal-600 text-white transition">Load sample events</button>
-      </div>
+        <!-- EMPTY STATE -->
+        <div id="emptyState" class="hidden text-center py-12 fade-in" role="status">
+          <div class="text-5xl mb-3" aria-hidden="true">📋</div>
+          <h3 class="text-lg font-semibold mb-1">No events yet</h3>
+          <p class="dark:text-slate-300 text-gray-600 text-sm mb-4">
+            Paste a notice above or click below to load realistic sample events.
+          </p>
+          <button
+            id="loadSamplesBtn"
+            type="button"
+            class="px-4 py-2 text-sm font-semibold rounded-xl bg-teal-500 hover:bg-teal-600 text-white transition shadow-sm"
+          >
+            Load sample events
+          </button>
+        </div>
+      </section>
     </div>
 
-    <!-- RIGHT COLUMN — mini calendar -->
-    <aside class="w-full lg:w-72 shrink-0 space-y-4">
-      <div class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200">
+    <!-- SIDEBAR COLUMN: MINI CALENDAR & STATS -->
+    <aside class="w-full lg:w-72 shrink-0 space-y-5" aria-label="Calendar overview and quick statistics">
+      <!-- Mini Month Calendar -->
+      <section class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 shadow-sm" aria-labelledby="miniCalTitle">
         <div class="flex items-center justify-between mb-3">
-          <h3 id="miniCalTitle" class="font-semibold text-sm"></h3>
+          <h2 id="miniCalTitle" class="font-bold text-sm"></h2>
           <div class="flex gap-1">
-            <button id="prevMonth" class="p-1 rounded dark:hover:bg-dark-600 hover:bg-gray-200 transition">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            <button
+              id="prevMonth"
+              type="button"
+              class="p-1.5 rounded-lg dark:hover:bg-dark-600 hover:bg-gray-100 transition"
+              aria-label="Previous month"
+              title="Previous month"
+            >
+              <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+              </svg>
             </button>
-            <button id="nextMonth" class="p-1 rounded dark:hover:bg-dark-600 hover:bg-gray-200 transition">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <button
+              id="nextMonth"
+              type="button"
+              class="p-1.5 rounded-lg dark:hover:bg-dark-600 hover:bg-gray-100 transition"
+              aria-label="Next month"
+              title="Next month"
+            >
+              <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
             </button>
           </div>
         </div>
-        <div id="miniCalGrid" class="grid grid-cols-7 gap-1 text-center text-xs"></div>
-      </div>
+        <div id="miniCalGrid" class="grid grid-cols-7 gap-1 text-center text-xs" role="grid" aria-label="Monthly overview grid"></div>
+      </section>
 
-      <!-- Quick stats -->
-      <div class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 space-y-3">
-        <h3 class="font-semibold text-sm">Quick Stats</h3>
-        <div class="flex items-center justify-between text-sm">
-          <span class="dark:text-gray-400 text-gray-500">Total events</span>
-          <span id="statTotal" class="font-semibold text-teal-400">0</span>
-        </div>
-        <div class="flex items-center justify-between text-sm">
-          <span class="dark:text-gray-400 text-gray-500">Urgent</span>
-          <span id="statUrgent" class="font-semibold text-red-400">0</span>
-        </div>
-        <div class="flex items-center justify-between text-sm">
-          <span class="dark:text-gray-400 text-gray-500">This week</span>
-          <span id="statWeek" class="font-semibold text-yellow-400">0</span>
-        </div>
-      </div>
+      <!-- Quick Statistics -->
+      <section class="rounded-2xl p-4 dark:bg-dark-700 bg-white border dark:border-dark-600 border-gray-200 shadow-sm space-y-3" aria-labelledby="stats-heading">
+        <h2 id="stats-heading" class="font-bold text-sm">Quick Stats</h2>
+        <dl class="space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <dt class="dark:text-slate-300 text-gray-700">Total events</dt>
+            <dd id="statTotal" class="font-bold text-teal-400">0</dd>
+          </div>
+          <div class="flex items-center justify-between">
+            <dt class="dark:text-slate-300 text-gray-700">Urgent (&le; 48 hrs)</dt>
+            <dd id="statUrgent" class="font-bold text-red-400">0</dd>
+          </div>
+          <div class="flex items-center justify-between">
+            <dt class="dark:text-slate-300 text-gray-700">This week (7 days)</dt>
+            <dd id="statWeek" class="font-bold text-amber-400">0</dd>
+          </div>
+        </dl>
+      </section>
     </aside>
   </main>
 
-  <!-- ───── EDIT MODAL ───── -->
-  <div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div class="absolute inset-0 bg-black/60" id="editOverlay"></div>
-    <div class="theme-transition relative dark:bg-dark-700 bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border dark:border-dark-600 border-gray-200 fade-in">
-      <h3 class="font-semibold mb-4">Edit Event</h3>
+  <!-- ───── FOOTER ───── -->
+  <footer class="mt-auto py-5 text-center text-xs dark:text-slate-400 text-gray-600 border-t dark:border-dark-600 border-gray-200">
+    <p>Campus Pulse &bull; AI-Powered Campus Life Assistant &bull; Built with Express, Tailwind &amp; Gemini</p>
+  </footer>
+
+  <!-- ───── ACCESSIBLE EDIT MODAL ───── -->
+  <div
+    id="editModal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="editModalTitle"
+  >
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="editOverlay" aria-hidden="true"></div>
+    <div class="theme-transition relative dark:bg-dark-700 bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl border dark:border-dark-600 border-gray-200 fade-in">
+      <h2 id="editModalTitle" class="font-bold text-lg mb-4">Edit Event</h2>
       <input type="hidden" id="editId" />
-      <div class="space-y-3">
+      <form id="editForm" onsubmit="return false;" class="space-y-3.5">
         <div>
-          <label class="text-xs dark:text-gray-400 text-gray-500">Title</label>
-          <input id="editTitle" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
+          <label for="editTitle" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Title</label>
+          <input
+            id="editTitle"
+            type="text"
+            required
+            class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs dark:text-gray-400 text-gray-500">Date</label>
-            <input id="editDate" type="date" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
+            <label for="editDate" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Date</label>
+            <input
+              id="editDate"
+              type="date"
+              required
+              class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
           </div>
           <div>
-            <label class="text-xs dark:text-gray-400 text-gray-500">Time</label>
-            <input id="editTime" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" placeholder="e.g. 3:00 PM" />
+            <label for="editTime" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Time</label>
+            <input
+              id="editTime"
+              type="text"
+              placeholder="e.g. 3:00 PM"
+              class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
           </div>
         </div>
         <div>
-          <label class="text-xs dark:text-gray-400 text-gray-500">Venue</label>
-          <input id="editVenue" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50" />
+          <label for="editVenue" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Venue</label>
+          <input
+            id="editVenue"
+            type="text"
+            placeholder="e.g. Seminar Hall 3"
+            class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          />
         </div>
         <div>
-          <label class="text-xs dark:text-gray-400 text-gray-500">Category</label>
-          <select id="editCategory" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50">
-            <option>Academic</option><option>Cultural</option><option>Sports</option><option>Club</option><option>Deadline</option><option>Other</option>
+          <label for="editCategory" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Category</label>
+          <select
+            id="editCategory"
+            class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option>Academic</option>
+            <option>Cultural</option>
+            <option>Sports</option>
+            <option>Club</option>
+            <option>Deadline</option>
+            <option>Other</option>
           </select>
         </div>
         <div>
-          <label class="text-xs dark:text-gray-400 text-gray-500">Notes</label>
-          <textarea id="editNotes" rows="2" class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-800 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none" placeholder="Important instructions, what to bring, etc."></textarea>
+          <label for="editNotes" class="block text-xs font-semibold dark:text-slate-300 text-gray-700 mb-1">Notes &amp; Instructions</label>
+          <textarea
+            id="editNotes"
+            rows="2"
+            class="theme-transition w-full rounded-lg dark:bg-dark-800 bg-gray-50 dark:text-gray-100 text-gray-900 p-2 text-sm border dark:border-dark-600 border-gray-300 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+            placeholder="Important instructions, what to bring, etc."
+          ></textarea>
         </div>
-      </div>
-      <div class="flex gap-2 mt-5 justify-end">
-        <button id="editCancel" class="px-4 py-2 text-sm rounded-lg dark:bg-dark-600 bg-gray-200 dark:hover:bg-dark-500 hover:bg-gray-300 dark:text-gray-300 text-gray-700 transition">Cancel</button>
-        <button id="editSave" class="px-4 py-2 text-sm rounded-lg bg-teal-500 hover:bg-teal-600 text-white transition">Save</button>
-      </div>
+        <div class="flex gap-2 mt-5 justify-end">
+          <button
+            id="editCancel"
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-lg dark:bg-dark-600 bg-gray-200 dark:hover:bg-dark-500 hover:bg-gray-300 dark:text-slate-200 text-gray-800 transition"
+          >
+            Cancel
+          </button>
+          <button
+            id="editSave"
+            type="submit"
+            class="px-4 py-2 text-sm font-semibold rounded-lg bg-teal-500 hover:bg-teal-600 text-white transition shadow-sm"
+          >
+            Save changes
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
   <script src="app.js"></script>
 </body>
 </html>
-
